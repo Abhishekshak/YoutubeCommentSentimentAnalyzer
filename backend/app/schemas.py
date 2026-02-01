@@ -1,20 +1,28 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
-# User schemas
+# --- User Schemas ---
 class UserCreate(BaseModel):
     username: str
-    email: EmailStr
+    address: str
+    email: str
     password: str
 
-class UserOut(BaseModel):
-    id: int
-    username: str
+class UserLogin(BaseModel):
     email: str
+    password: str
 
-    class Config:
-        orm_mode = True
-
-# Token schemas
 class Token(BaseModel):
     access_token: str
     token_type: str
+    username: str
+
+# --- Sentiment History Schemas ---
+class SentimentHistoryCreate(BaseModel):
+    video_url: str
+    video_title: str
+    sentiment: str  # e.g., "Positive", "Negative", "Neutral"
+
+class SentimentHistoryOut(BaseModel):
+    video_url: str
+    video_title: str
+    sentiment: str

@@ -1,22 +1,21 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import os
-from dotenv import load_dotenv
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-load_dotenv()
+DB_HOST = "localhost"
+DB_NAME = "sentiment_db"
+DB_USER = "postgres"
+DB_PASSWORD = "admin"
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
-
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def get_connection():
+    """
+    Returns a new connection to the PostgreSQL database.
+    Use conn.cursor() to get a cursor.
+    """
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        cursor_factory=RealDictCursor
+    )
+    return conn
