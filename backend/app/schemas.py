@@ -20,9 +20,13 @@ class Token(BaseModel):
 class SentimentHistoryCreate(BaseModel):
     video_url: str
     video_title: str
-    sentiment: str  # e.g., "Positive", "Negative", "Neutral"
+    sentiment: str  # e.g., "Positive", "Negative"
 
 class SentimentHistoryOut(BaseModel):
     video_url: str
     video_title: str
     sentiment: str
+
+class AdminLogin(BaseModel):
+    username: str
+    password: str

@@ -4,10 +4,10 @@ from googleapiclient.discovery import build
 from dotenv import load_dotenv
 import os
 import pickle
-import json
+import re
 
 from app.ml_model.naive_bayes import clean_text
-from app import auth, crud  # your auth and crud modules
+from app import auth, crud
 
 load_dotenv()
 
@@ -22,95 +22,185 @@ with open(MODEL_PATH, "rb") as f:
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
 
-# HTTP Bearer security
+# Security
 security = HTTPBearer()
+
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Authenticate user from Bearer token"""
     token = credentials.credentials
     user_email = auth.verify_access_token(token)
+
     if not user_email:
         raise HTTPException(status_code=401, detail="Invalid token")
+
     return user_email
 
-def fetch_video_title(video_id: str) -> str:
-    """Fetch video title from YouTube API"""
+
+# -----------------------------
+# Comment Filtering
+# -----------------------------
+
+def is_valid_comment(comment: str):
+    """Filter useless comments"""
+    text = clean_text(comment)
+
+    if len(text.split()) < 3:
+        return False
+
+    if not re.search(r"[a-zA-Z]", text):
+        return False
+
+    return True
+
+
+# -----------------------------
+# Fetch Video Title
+# -----------------------------
+
+def fetch_video_title(video_id: str):
     try:
-        response = youtube.videos().list(part="snippet", id=video_id).execute()
-        title = response["items"][0]["snippet"]["title"]
-        return title
+        response = youtube.videos().list(
+            part="snippet",
+            id=video_id
+        ).execute()
+
+        return response["items"][0]["snippet"]["title"]
+
     except Exception:
         return "Unknown Title"
 
+
+# -----------------------------
+# Fetch MANY Comments
+# -----------------------------
+
+def fetch_comments(video_id: str, max_comments: int = 500):
+    """Fetch comments using pagination"""
+    comments = []
+    next_page_token = None
+
+    while len(comments) < max_comments:
+
+        response = youtube.commentThreads().list(
+            part="snippet",
+            videoId=video_id,
+            maxResults=100,
+            pageToken=next_page_token,
+            textFormat="plainText"
+        ).execute()
+
+        for item in response.get("items", []):
+            comment = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
+            comments.append(comment)
+
+        next_page_token = response.get("nextPageToken")
+
+        if not next_page_token:
+            break
+
+    return comments[:max_comments]
+
+
+# -----------------------------
+# Analyze Video
+# -----------------------------
 
 @router.post("/analyze_video")
 def analyze_video(
     payload: dict = Body(...),
     current_user: str = Depends(get_current_user)
 ):
-    """Analyze a YouTube video's comments and save sentiment history"""
+
     video_id = payload.get("video_id")
+
     if not video_id:
         raise HTTPException(status_code=400, detail="Video ID is required")
 
-    # Extract video ID if a full URL is provided
+    # Extract ID from full URL
     if "v=" in video_id:
         video_id = video_id.split("v=")[1].split("&")[0]
 
-    # Fetch video title automatically
     video_title = fetch_video_title(video_id)
 
-    # Fetch top-level comments
     try:
-        response = youtube.commentThreads().list(
-            part="snippet",
-            videoId=video_id,
-            maxResults=100,
-            textFormat="plainText"
-        ).execute()
+        comments = fetch_comments(video_id, 500)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not fetch comments: {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not fetch comments: {str(e)}"
+        )
 
-    comments = [
-        item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
-        for item in response.get("items", [])
-    ]
+    # -----------------------------
+    # Filter bad comments
+    # -----------------------------
 
-    # Clean comments and predict sentiment
-    cleaned = [clean_text(c) for c in comments]
+    filtered_comments = [c for c in comments if is_valid_comment(c)]
+
+    if not filtered_comments:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid comments found for analysis"
+        )
+
+    # -----------------------------
+    # Clean + Predict
+    # -----------------------------
+
+    cleaned = [clean_text(c) for c in filtered_comments]
+
     predictions = model.predict(cleaned)
 
-    # Save sentiment history to DB
+    # -----------------------------
+    # Save History
+    # -----------------------------
+
     user_row = crud.get_user_by_email(current_user)
+
     if not user_row:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user_id = user_row['id']
+    user_id = user_row["id"]
+
+    result_data = [
+        {"comment": c, "sentiment": int(s)}
+        for c, s in zip(filtered_comments, predictions)
+    ]
+
     crud.save_sentiment_history(
         user_id=user_id,
         video_url=video_id,
         video_title=video_title,
-        result=[{"comment": c, "sentiment": int(s)} for c, s in zip(comments, predictions)]
+        result=result_data
     )
 
-    # Return sentiment results
+    # -----------------------------
+    # Return results
+    # -----------------------------
+
     return {
         "video_id": video_id,
         "video_title": video_title,
-        "results": [
-            {"comment": c, "sentiment": int(s)}
-            for c, s in zip(comments, predictions)
-        ]
+        "total_comments_fetched": len(comments),
+        "comments_analyzed": len(filtered_comments),
+        "results": result_data
     }
 
 
+# -----------------------------
+# History Route
+# -----------------------------
+
 @router.get("/history")
 def get_history(current_user: str = Depends(get_current_user)):
-    """Fetch all sentiment analysis history for the current user"""
+
     user_row = crud.get_user_by_email(current_user)
+
     if not user_row:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user_id = user_row['id']
+    user_id = user_row["id"]
+
     history = crud.get_sentiment_history(user_id)
+
     return {"history": history}

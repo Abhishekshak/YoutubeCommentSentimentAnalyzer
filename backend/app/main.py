@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import video, user
+from app.routes import video, user, admin, single_comment_api
 
 app = FastAPI(title="YouTube Sentiment Analyzer")
 
@@ -21,3 +21,5 @@ app.add_middleware(
 # Include routers
 app.include_router(video.router, prefix="/video")
 app.include_router(user.router)  # ✅ do NOT add prefix here
+app.include_router(admin.router)
+app.include_router(single_comment_api.router, prefix="/comment")

@@ -34,10 +34,24 @@ export default function SentimentAnalyzer() {
 
   const navigate = useNavigate();
 
+  // Redirect if not logged in
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) navigate("/login");
   }, [navigate]);
+
+  // Load last analysis from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("lastAnalysis");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setVideoUrl(parsed.videoUrl || "");
+      setVideoTitle(parsed.videoTitle || "");
+      setThumbnailUrl(parsed.thumbnailUrl || null);
+      setData({ results: parsed.results || [] });
+      setIsValidYoutubeUrl(!!parsed.videoUrl && !!getVideoId(parsed.videoUrl));
+    }
+  }, []);
 
   const getVideoId = (url) => {
     const match = url.match(
@@ -61,11 +75,11 @@ export default function SentimentAnalyzer() {
     if (!videoUrl.trim() || !isValidYoutubeUrl) return;
 
     const videoId = getVideoId(videoUrl);
-    setThumbnailUrl(
-      videoId
-        ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
-        : null
-    );
+    const thumbnail = videoId
+      ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+      : null;
+
+    setThumbnailUrl(thumbnail);
     setVideoTitle(await fetchVideoTitle(videoUrl));
 
     setLoading(true);
@@ -81,9 +95,22 @@ export default function SentimentAnalyzer() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (res.data.results && Array.isArray(res.data.results))
+      if (res.data.results && Array.isArray(res.data.results)) {
         setData(res.data);
-      else setError("No results returned from backend.");
+
+        // Save analysis to localStorage
+        localStorage.setItem(
+          "lastAnalysis",
+          JSON.stringify({
+            videoUrl,
+            videoTitle: await fetchVideoTitle(videoUrl),
+            thumbnailUrl: thumbnail,
+            results: res.data.results,
+          })
+        );
+      } else {
+        setError("No results returned from backend.");
+      }
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.detail || "Failed to fetch analysis");
@@ -115,6 +142,11 @@ export default function SentimentAnalyzer() {
     const value = e.target.value;
     setVideoUrl(value);
     setIsValidYoutubeUrl(!!getVideoId(value));
+
+    // Optional: clear previous analysis when typing a new URL
+    setData({ results: [] });
+    setVideoTitle("");
+    setThumbnailUrl(null);
   };
 
   return (
@@ -151,7 +183,7 @@ export default function SentimentAnalyzer() {
                 },
             }}
           />
-                <Button
+          <Button
             onClick={handleAnalyze}
             variant="contained"
             disabled={!isValidYoutubeUrl || loading}
@@ -161,14 +193,13 @@ export default function SentimentAnalyzer() {
                 bgcolor: isValidYoutubeUrl ? "#cc0000" : "#6b7280",
               },
               "&.Mui-disabled": {
-                bgcolor: "#7c806b", 
-                color: "#fff",      
+                bgcolor: "#7c806b",
+                color: "#fff",
               },
             }}
           >
             {loading ? <CircularProgress size={24} color="inherit" /> : "Analyze"}
           </Button>
-
         </Box>
 
         {error && (
@@ -296,10 +327,7 @@ export default function SentimentAnalyzer() {
                     mb: 2,
                     pb: 1,
                     borderBottom: "1px solid #374151",
-                    color:
-                      item.sentiment === "Positive"
-                        ? "#22c55e"
-                        : "#f87171",
+                    color: item.sentiment === "Positive" ? "#22c55e" : "#f87171",
                   }}
                 >
                   <Typography variant="body2">

@@ -1,37 +1,43 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
-import {
-  Box,
-  TextField,
-  Button,
-  Typography,
-  Paper,
-  Alert,
-  Snackbar,
-} from "@mui/material";
+import { Box, TextField, Button, Typography, Paper, Alert, Snackbar } from "@mui/material";
+import { Formik, Form } from "formik";
+import * as Yup from "yup";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const [success, setSuccess] = useState(false); // ✅ Snackbar state
+  const [success, setSuccess] = useState(false);
+  const [generalError, setGeneralError] = useState(""); // for invalid credentials or other messages
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const validationSchema = Yup.object({
+    email: Yup.string().email("Invalid email").required("Email is required"),
+    password: Yup.string().required("Password is required"),
+  });
+
+  const handleLogin = async (values, { setSubmitting, setFieldError }) => {
+    setGeneralError(""); // reset general error
     try {
-      const res = await axios.post("http://127.0.0.1:8000/auth/login", { email, password });
+      const res = await axios.post("http://127.0.0.1:8000/auth/login", values);
 
       localStorage.setItem("token", res.data.access_token);
       localStorage.setItem("username", res.data.username);
 
-      setSuccess(true); // show success snackbar
-
-      // redirect after 1s so user can see the snackbar
+      setSuccess(true);
       setTimeout(() => navigate("/analyze"), 1000);
     } catch (err) {
-      setMessage(err.response?.data?.detail || "Login failed");
+      const msg = err.response?.data?.detail || "Login failed";
+
+      // If the error is specific to a field, map it there
+      if (msg.toLowerCase().includes("email")) {
+        setFieldError("email", msg);
+      } else if (msg.toLowerCase().includes("password")) {
+        setFieldError("password", msg);
+      } else {
+        // Otherwise, show it as general error (like Invalid credentials)
+        setGeneralError(msg);
+      }
+      setSubmitting(false);
     }
   };
 
@@ -56,81 +62,75 @@ export default function Login() {
           backgroundColor: "#1f2937",
         }}
       >
-        <Typography
-          variant="h5"
-          sx={{ mb: 2, color: "#fff", textAlign: "center" }}
-        >
+        <Typography variant="h5" sx={{ mb: 2, color: "#fff", textAlign: "center" }}>
           Login
         </Typography>
 
-        {message && (
-          <Alert
-            severity="error"
-            sx={{ mb: 2, backgroundColor: "#f87171", color: "#fff" }}
-          >
-            {message}
+        {generalError && (
+          <Alert severity="error" sx={{ mb: 2, backgroundColor: "#f87171", color: "#fff" }}>
+            {generalError}
           </Alert>
         )}
 
-        <form onSubmit={handleLogin}>
-          <TextField
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            fullWidth
-            required
-            variant="filled"
-            sx={{
-              mb: 2,
-              "& .MuiFilledInput-root": {
-                backgroundColor: "#111827",
-                color: "#fff",
-              },
-              "& .MuiInputLabel-root": { color: "#d1d5db" },
-              "& .MuiFilledInput-underline:before": { borderBottomColor: "#374151" },
-              "& .MuiFilledInput-underline:after": { borderBottomColor: "#FF0000" },
-            }}
-          />
-
-          <TextField
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            fullWidth
-            required
-            variant="filled"
-            sx={{
-              mb: 3,
-              "& .MuiFilledInput-root": {
-                backgroundColor: "#111827",
-                color: "#fff",
-              },
-              "& .MuiInputLabel-root": { color: "#d1d5db" },
-              "& .MuiFilledInput-underline:before": { borderBottomColor: "#374151" },
-              "& .MuiFilledInput-underline:after": { borderBottomColor: "#FF0000" },
-            }}
-          />
-
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            sx={{
-              backgroundColor: "#FF0000",
-              "&:hover": { backgroundColor: "#e60000" },
-              mb: 2,
-            }}
-          >
-            Login
-          </Button>
-        </form>
-
-        <Typography
-          variant="body2"
-          sx={{ color: "#d1d5db", textAlign: "center" }}
+        <Formik
+          initialValues={{ email: "", password: "" }}
+          validationSchema={validationSchema}
+          onSubmit={handleLogin}
         >
+          {({ errors, touched, getFieldProps, isSubmitting }) => (
+            <Form>
+              <TextField
+                label="Email"
+                type="email"
+                {...getFieldProps("email")}
+                fullWidth
+                variant="filled"
+                error={touched.email && Boolean(errors.email)}
+                helperText={touched.email && errors.email}
+                sx={{
+                  mb: 2,
+                  "& .MuiFilledInput-root": { backgroundColor: "#111827", color: "#fff" },
+                  "& .MuiInputLabel-root": { color: "#d1d5db" },
+                  "& .MuiFilledInput-underline:before": { borderBottomColor: "#374151" },
+                  "& .MuiFilledInput-underline:after": { borderBottomColor: "#FF0000" },
+                }}
+              />
+
+              <TextField
+                label="Password"
+                type="password"
+                {...getFieldProps("password")}
+                fullWidth
+                variant="filled"
+                error={touched.password && Boolean(errors.password)}
+                helperText={touched.password && errors.password}
+                sx={{
+                  mb: 3,
+                  "& .MuiFilledInput-root": { backgroundColor: "#111827", color: "#fff" },
+                  "& .MuiInputLabel-root": { color: "#d1d5db" },
+                  "& .MuiFilledInput-underline:before": { borderBottomColor: "#374151" },
+                  "& .MuiFilledInput-underline:after": { borderBottomColor: "#FF0000" },
+                }}
+              />
+
+              <Button
+                type="submit"
+                variant="contained"
+                fullWidth
+                disabled={isSubmitting}
+                sx={{
+                  backgroundColor: "#FF0000",
+                  "&:hover": { backgroundColor: "#e60000" },
+                  mb: 2,
+                }}
+              >
+                Login
+              </Button>
+            </Form>
+          )}
+        </Formik>
+
+        <Typography variant="body2" sx={{ color: "#d1d5db", textAlign: "center" }}>
           Don’t have an account?{" "}
           <Link to="/register" style={{ color: "#FF0000", textDecoration: "none" }}>
             Register
@@ -138,7 +138,6 @@ export default function Login() {
         </Typography>
       </Paper>
 
-      {/* Snackbar for successful login */}
       <Snackbar
         open={success}
         autoHideDuration={1500}
