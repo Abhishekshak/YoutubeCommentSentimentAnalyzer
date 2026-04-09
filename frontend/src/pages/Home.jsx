@@ -34,7 +34,7 @@ export default function Home() {
     },
     {
       title: "Review & Export",
-      description: "Download or review your sentiment analysis report.",
+      description: "Download or review your sentiment analysis report. (Coming Soon)",
     },
   ];
 

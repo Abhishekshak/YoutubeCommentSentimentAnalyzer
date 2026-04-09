@@ -22,6 +22,17 @@ import {
 } from "recharts";
 import YouTubeIcon from "@mui/icons-material/YouTube";
 
+// ── Helper: decode JWT payload without a library ────────────────────────────
+function getUserIdFromToken(token) {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    // Use 'sub', 'id', 'user_id', or 'email' — whichever your backend sets
+    return payload.sub || payload.id || payload.user_id || payload.email || null;
+  } catch {
+    return null;
+  }
+}
+
 export default function SentimentAnalyzer() {
   const [videoUrl, setVideoUrl] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
@@ -34,15 +45,26 @@ export default function SentimentAnalyzer() {
 
   const navigate = useNavigate();
 
-  // Redirect if not logged in
+  // ── Per-user localStorage key ──────────────────────────────────────────────
+  const getStorageKey = () => {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+    const userId = getUserIdFromToken(token);
+    return userId ? `lastAnalysis_${userId}` : null;
+  };
+
+  // ── Redirect if not logged in ──────────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) navigate("/login");
   }, [navigate]);
 
-  // Load last analysis from localStorage
+  // ── Load last analysis for THIS user only ──────────────────────────────────
   useEffect(() => {
-    const saved = localStorage.getItem("lastAnalysis");
+    const key = getStorageKey();
+    if (!key) return;
+
+    const saved = localStorage.getItem(key);
     if (saved) {
       const parsed = JSON.parse(saved);
       setVideoUrl(parsed.videoUrl || "");
@@ -80,7 +102,8 @@ export default function SentimentAnalyzer() {
       : null;
 
     setThumbnailUrl(thumbnail);
-    setVideoTitle(await fetchVideoTitle(videoUrl));
+    const title = await fetchVideoTitle(videoUrl);
+    setVideoTitle(title);
 
     setLoading(true);
     setError("");
@@ -98,16 +121,19 @@ export default function SentimentAnalyzer() {
       if (res.data.results && Array.isArray(res.data.results)) {
         setData(res.data);
 
-        // Save analysis to localStorage
-        localStorage.setItem(
-          "lastAnalysis",
-          JSON.stringify({
-            videoUrl,
-            videoTitle: await fetchVideoTitle(videoUrl),
-            thumbnailUrl: thumbnail,
-            results: res.data.results,
-          })
-        );
+        // ── Save analysis keyed to this user ──────────────────────────────
+        const key = getStorageKey();
+        if (key) {
+          localStorage.setItem(
+            key,
+            JSON.stringify({
+              videoUrl,
+              videoTitle: title,
+              thumbnailUrl: thumbnail,
+              results: res.data.results,
+            })
+          );
+        }
       } else {
         setError("No results returned from backend.");
       }
@@ -142,8 +168,6 @@ export default function SentimentAnalyzer() {
     const value = e.target.value;
     setVideoUrl(value);
     setIsValidYoutubeUrl(!!getVideoId(value));
-
-    // Optional: clear previous analysis when typing a new URL
     setData({ results: [] });
     setVideoTitle("");
     setThumbnailUrl(null);
@@ -174,13 +198,10 @@ export default function SentimentAnalyzer() {
               backgroundColor: "#1f2937",
               borderRadius: 1,
               input: { color: "#fff" },
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: "#374151",
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "#374151" },
+              "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#FF0000",
               },
-              "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline":
-                {
-                  borderColor: "#FF0000",
-                },
             }}
           />
           <Button
@@ -189,13 +210,8 @@ export default function SentimentAnalyzer() {
             disabled={!isValidYoutubeUrl || loading}
             sx={{
               bgcolor: isValidYoutubeUrl ? "#FF0000" : "#7c806b",
-              "&:hover": {
-                bgcolor: isValidYoutubeUrl ? "#cc0000" : "#6b7280",
-              },
-              "&.Mui-disabled": {
-                bgcolor: "#7c806b",
-                color: "#fff",
-              },
+              "&:hover": { bgcolor: isValidYoutubeUrl ? "#cc0000" : "#6b7280" },
+              "&.Mui-disabled": { bgcolor: "#7c806b", color: "#fff" },
             }}
           >
             {loading ? <CircularProgress size={24} color="inherit" /> : "Analyze"}
@@ -225,13 +241,7 @@ export default function SentimentAnalyzer() {
         {!isEmptyState && thumbnailUrl && (
           <>
             {/* Video Info */}
-            <Card
-              sx={{
-                display: "flex",
-                backgroundColor: "#1f2937",
-                mb: 4,
-              }}
-            >
+            <Card sx={{ display: "flex", backgroundColor: "#1f2937", mb: 4 }}>
               <Box
                 component="img"
                 src={thumbnailUrl}
