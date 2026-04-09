@@ -40,7 +40,7 @@ Try the app now on Replit and see it in action!
 
 ## 💡 Screenshot
 
-![App Screenshot](frontend/assets/screenshot.png)
+![App Screenshot](frontend/assets/Screenshot.png)
 
 ---
 
