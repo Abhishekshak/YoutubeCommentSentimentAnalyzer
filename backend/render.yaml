@@ -6,11 +6,11 @@ services:
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port 10000"
     envVars:
       - key: YOUTUBE_API_KEY
-        fromDatabase: false
+        fromDatabase: "false"
         value: your_youtube_api_key_here
       - key: DATABASE_URL
-        fromDatabase: false
+        fromDatabase: "false"
         value: your_database_url_here
       - key: SECRET_KEY
-        fromDatabase: false
+        fromDatabase: "false"
         value: super_secret_key_here
