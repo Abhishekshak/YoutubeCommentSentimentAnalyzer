@@ -7,7 +7,7 @@ Visualize whether comments are **positive** or **negative** and gain insights qu
 
 ## 🚀 Live Demo
 
-[![Open in Replit](https://img.shields.io/badge/Open%20in-Replit-blue?logo=replit&logoColor=white)](https://youtube-comment-sentiment-analyzer--AbhishekShakya5.replit.app)  
+[![Open in Replit](https://img.shields.io/badge/Open%20in-Replit-blue?logo=replit&logoColor=white)](https://youtube-comment-sentiment-analyzer--AbhishekShk.replit.app)  
 Try the app now on Replit and see it in action!
 
 ---
